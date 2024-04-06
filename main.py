@@ -4,7 +4,7 @@ from telebot.handler_backends import State, StatesGroup
 from db import *
 
 API_TOKEN = ''  # ВСТАВИТЬ ДАННЫЕ
-admins = [1505244069]  # Вставить id админов
+admins = []  # Вставить id админов
 
 bot = telebot.TeleBot(API_TOKEN)
 
@@ -147,12 +147,9 @@ def bot_delete_question(message: telebot.types.Message):  # Удаляем во�
 def bot_answer_question(message: telebot.types.Message):  # Отвечаем на вопрос, вносим данные в базу
     with bot.retrieve_data(message.from_user.id) as data:
         question_to_answer = data['question_to_answer']
-    try:
-        picked_choice = get_choices_for_question(question_to_answer)[int(message.text) - 1]  # Если вопроса с таким
-        # номером нет, просим повторить попытку
-    except Exception:
-        bot.send_message(message.chat.id, 'Вы ввели что-то не так. Попробуйте снова')
-    else:
+    all_choices = get_choices_for_question(question_to_answer)
+    if message.text.isnumeric() and 0 < int(message.text) <= len(all_choices):
+        picked_choice = all_choices[int(message.text) - 1]
         answer_question(message.from_user.id, question_to_answer, picked_choice)
         bot.delete_state(message.from_user.id, message.chat.id)
         markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True)
@@ -160,6 +157,8 @@ def bot_answer_question(message: telebot.types.Message):  # Отвечаем н�
             telebot.types.KeyboardButton("Меню")
         )
         bot.send_message(message.chat.id, 'Ваш ответ успешно добавлен', reply_markup=markup)
+    else:
+        bot.send_message(message.chat.id, 'Вы ввели что-то не так. Попробуйте снова')
 
 
 @bot.message_handler(func=lambda message: message.text == 'Меню')

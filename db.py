@@ -2,14 +2,29 @@ import psycopg2
 from datetime import datetime
 
 
-def create_database():  # Создаем базу данных
+def get_connection_to_database():
     conn = psycopg2.connect(
         dbname="",
         user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
+        password='', #ВСТАВИТЬ ДАННЫЕ
         host='',
         port=,
     )
+    return conn
+
+
+def decorator_add_connection(func):
+    def wrapper(*args, **kwargs):
+        conn = get_connection_to_database()
+        result = func(*args, **kwargs, conn=conn)
+        conn.close()
+        return result
+
+    return wrapper
+
+
+@decorator_add_connection
+def create_database(conn=None):  # Создаем базу данных
     conn.autocommit = False
     cur = conn.cursor()
     cur.execute("""CREATE TABLE IF NOT EXISTS public.question(
@@ -51,47 +66,32 @@ def create_database():  # Создаем базу данных
     conn.commit()
     try:  # Создаем самый важный вопрос :)
         publish_date = datetime.now()
-        cur.execute("INSERT INTO question VALUES (1, 'Вам нравится мой бот?', (%s));", (publish_date, ))
+        cur.execute("INSERT INTO question VALUES (1, 'Вам нравится мой бот?', (%s));", (publish_date,))
         cur.execute("INSERT INTO choice VALUES (1, 'Да', 0, 1),(2, 'Да, очень', 0, 1),(3, 'Определенно да', 0, 1);")
     except Exception:
         cur.close()
-        conn.close()
     else:
         conn.commit()
         cur.close()
-        conn.close()
 
 
-def get_all_questions():  # Получаем все вопросы с ответами
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
-    with conn.cursor() as cur:
-        cur.execute('SELECT * FROM question ORDER BY id ASC')
-        select = cur.fetchall()
-        if not select:
-            conn.close()
-            return ['Повелитель, Вы забыли? Вопросов еще нет', False]  # Если вопросов нет, возвращаем список с False
-        select_list = [list(b) for b in select]
-        answer = 'Вопросы:\n'
-        for i in select_list:
-            answer += f'Вопрос {i[0]}: {i[1]}\n'
-    conn.close()
+@decorator_add_connection
+def get_all_questions(conn=None):  # Получаем все вопросы с ответами
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM question ORDER BY id ASC')
+    select = cur.fetchall()
+    if not select:
+        return ['Повелитель, Вы забыли? Вопросов еще нет', False]  # Если вопросов нет, возвращаем список с False
+    select_list = [list(b) for b in select]
+    answer = 'Вопросы:\n'
+    for i in select_list:
+        answer += f'Вопрос {i[0]}: {i[1]}\n'
+    cur.close()
     return answer
 
 
-def get_choices_for_question(question_id):  # Получаем варианты ответа на вопрос
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def get_choices_for_question(question_id, conn=None):  # Получаем варианты ответа на вопрос
     with conn.cursor() as cur:
         cur.execute("""SELECT choice.id FROM choice WHERE question_id = (%s)""", (question_id,))
         select = cur.fetchall()
@@ -99,18 +99,11 @@ def get_choices_for_question(question_id):  # Получаем варианты 
         for _ in select:
             for item in _:
                 answer.append(item)
-    conn.close()
     return answer
 
 
-def find_not_answered(user_id):  # Находим вопрос, на который пользователь не давал ответа
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def find_not_answered(user_id, conn=None):  # Находим вопрос, на который пользователь не давал ответа
     with conn.cursor() as cur:
         cur.execute("SELECT question.id FROM question")
         all_questions = cur.fetchall()
@@ -131,21 +124,13 @@ JOIN statistic ON statistic.question_id = question.id and statistic.tg_user_id =
                 answer = i
                 break
         if answer == 0:
-            conn.close()
             return False
         else:
-            conn.close()
             return answer
 
 
-def find_empty_id(DB):  # Находим свободное id в таблице X
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def find_empty_id(DB, conn=None):  # Находим свободное id в таблице X
     with conn.cursor() as cur:
         if DB == 'question':
             cur.execute("SELECT id from question")
@@ -162,60 +147,38 @@ def find_empty_id(DB):  # Находим свободное id в таблице
         free_id = 1
         while free_id in select_list:
             free_id += 1
-        conn.close()
         return free_id
 
 
-def add_question(question_text, publish_date):  # Добавляем в базу данных вопрос
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def add_question(question_text, publish_date, conn=None):  # Добавляем в базу данных вопрос
     conn.autocommit = False
     cur = conn.cursor()
     number = find_empty_id("question")
     cur.execute("INSERT INTO question VALUES ((%s), (%s), (%s))", (number, question_text, publish_date,))
     conn.commit()
     cur.close()
-    conn.close()
     return int(number)
 
 
-def add_choice(choice_text, question_id):  # Добавляем в базу данных варианты ответа на вопрос
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def add_choice(choice_text, question_id, conn=None):  # Добавляем в базу данных варианты ответа на вопрос
     conn.autocommit = False
     cur = conn.cursor()
     number = find_empty_id("choice")
     cur.execute("INSERT INTO choice VALUES ((%s), (%s), (%s), (%s))", (number, choice_text, 0, question_id), )
     conn.commit()
     cur.close()
-    conn.close()
 
 
-def delete_question(question_id):  # Удаляем вопрос
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='!',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def delete_question(question_id, conn=None):  # Удаляем вопрос
     conn.autocommit = False
     cur = conn.cursor()
     cur.execute("""SELECT FROM question WHERE question.id = (%s)""", (question_id,))
     select = cur.fetchall()
     if not select:  # Если вопросов нет, возвращаем False
         cur.close()
-        conn.close()
         return False
     else:
         cur.execute("DELETE FROM statistic WHERE statistic.question_id = (%s)", (question_id,))
@@ -223,21 +186,13 @@ def delete_question(question_id):  # Удаляем вопрос
         cur.execute("DELETE FROM question WHERE question.id = (%s)", (question_id,))
         conn.commit()
         cur.close()
-        conn.close()
         return True
 
 
-def get_question(user_id):  # Получаем уникальный вопрос
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def get_question(user_id, conn=None):  # Получаем уникальный вопрос
     question_id = find_not_answered(user_id)
     if not question_id:
-        conn.close()
         return False  # Если на все ответили или вопросов нет возвращаем False
     else:
         cur = conn.cursor()
@@ -246,7 +201,6 @@ def get_question(user_id):  # Получаем уникальный вопрос
         select = cur.fetchall()
         select_list = [list(b) for b in select]
         cur.close()
-        conn.close()
         answer = f"{select_list[0][0]} \n"
         number = 0
         for i in select_list:
@@ -255,14 +209,8 @@ def get_question(user_id):  # Получаем уникальный вопрос
         return [answer, question_id]
 
 
-def answer_question(tg_user_id, question_id, choice_id):  # Отвечаем на вопрос
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def answer_question(tg_user_id, question_id, choice_id, conn=None):  # Отвечаем на вопрос
     conn.autocommit = False
     cur = conn.cursor()
     number = find_empty_id('statistic')
@@ -281,17 +229,10 @@ SET votes = (%s)
 WHERE id = (%s) and question_id = (%s)""", (votes_number, choice_id, question_id))
     conn.commit()
     cur.close()
-    conn.close()
 
 
-def get_all_statistic():  # Получаем общую статистику
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='!',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def get_all_statistic(conn=None):  # Получаем общую статистику
     cur = conn.cursor()
     cur.execute("SELECT * FROM public.question ORDER BY id ASC ")
     questions = cur.fetchall()
@@ -313,18 +254,11 @@ def get_all_statistic():  # Получаем общую статистику
             for f in choices_list:
                 answer += f"- {f[0]} -- {f[1]} \n"
     cur.close()
-    conn.close()
     return answer
 
 
-def get_own_statistic(tg_user_id):  # Получаем личную статистику
-    conn = psycopg2.connect(
-        dbname="",
-        user="",
-        password='',  # ВСТАВИТЬ ДАННЫЕ
-        host='',
-        port=,
-    )
+@decorator_add_connection
+def get_own_statistic(tg_user_id, conn=None):  # Получаем личную статистику
     with conn.cursor() as cur:
         cur.execute("""SELECT question.id, question.question_text, choice.choice_text FROM statistic
 JOIN question ON statistic.question_id = question.id
@@ -340,5 +274,4 @@ ORDER BY id ASC""", (tg_user_id,))
             answer = ""
             for i in user_answers_list:
                 answer += f"\nВопрос {i[0]}: {i[1]} -- {i[2]}"
-    conn.close()
     return answer
